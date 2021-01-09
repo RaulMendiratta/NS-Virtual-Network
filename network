@@ -1,0 +1,98 @@
+ip netns add c1
+ip netns add c2
+ip netns add r1
+
+ip netns add s1
+ip netns add s2
+ip netns add r2
+
+ovs-vsctl add-br OVS1
+
+ovs-vsctl add-br OVS2
+
+ip link add veth-c1 type veth peer name veth-c1-br
+ip link add veth-c2 type veth peer name veth-c2-br
+ip link add veth-r1 type veth peer name veth-r1-br
+
+ip link add veth-s1 type veth peer name veth-s1-br
+ip link add veth-s2 type veth peer name veth-s2-br
+ip link add veth-r2 type veth peer name veth-r2-br
+
+ip link set veth-c1 netns c1
+ovs-vsctl add-port OVS1 veth-c1-br
+
+ip link set veth-c2 netns c2
+ovs-vsctl add-port OVS1 veth-c2-br
+
+ip link set veth-r1 netns r1
+ovs-vsctl add-port OVS1 veth-r1-br
+
+ip link set veth-s1 netns s1
+ovs-vsctl add-port OVS2 veth-s1-br
+
+ip link set veth-s2 netns s2
+ovs-vsctl add-port OVS2 veth-s2-br
+
+ip link set veth-r2 netns r2
+ovs-vsctl add-port OVS2 veth-r2-br
+
+
+
+ip link set veth-c1-br up
+ip -n c1 link set lo up
+ip -n c1 link set veth-c1 up
+ip -n c1 addr add 192.168.15.1/24 dev veth-c1
+echo “c1 ip = 192.168.15.1"
+
+ip link set veth-c2-br up
+ip -n c2 link set lo up
+ip -n c2 link set veth-c2 up
+ip -n c2 addr add 192.168.15.2/24 dev veth-c2
+echo “c2 ip = 192.168.15.2”
+
+ip link set veth-r1-br up
+ip -n r1 link set lo up
+ip -n r1 link set veth-r1 up
+ip -n r1 addr add 192.168.15.3/24 dev veth-r1
+echo “r1 ip = 192.168.15.3”
+
+ip link set veth-s1-br up
+ip -n s1 link set lo up
+ip -n s1 link set veth-s1 up
+ip -n s1 addr add 10.0.0.1/24 dev veth-s1
+echo “s1 ip = 10.0.0.1”
+
+ip link set veth-s2-br up
+ip -n s2 link set lo up
+ip -n s2 link set veth-s2 up
+ip -n s2 addr add  10.0.0.2/24 dev veth-s2
+echo “s2 ip = 10.0.0.2”
+
+ip link set veth-r2-br up
+ip -n r2 link set lo up
+ip -n r2 link set veth-r2 up
+ip -n r2 addr add  10.0.0.3/24 dev veth-r2
+echo “r2 ip = 10.0.0.3”
+
+
+ip link add veth-r1-r2 type veth peer name veth-r2-r1
+ip link set veth-r1-r2 netns r1
+ip link set veth-r2-r1 netns r2
+
+ip -n r1 link set veth-r1-r2 up
+ip -n r1 addr add  10.0.1.0/16 dev veth-r1-r2
+echo “r1-r2 ip = 10.0.1.0”
+
+ip -n r2 link set veth-r2-r1 up
+ip -n r2 addr add  10.0.2.0/16 dev veth-r2-r1
+echo “r2-r1 ip = 10.0.1.0”
+
+ip netns exec r1 sysctl -w net.ipv4.ip_forward=1
+ip netns exec r2 sysctl -w net.ipv4.ip_forward=1
+
+ip netns exec r1 route add -net 10.0.0.0 netmask 255.255.255.0 gw 10.0.2.0
+ip netns exec r2 route add -net 192.168.15.0 netmask 255.255.255.0 gw 10.0.1.0
+ip netns exec c1 route add default gw 192.168.15.3
+ip netns exec c2 route add default gw 192.168.15.3
+ip netns exec s1 route add default gw 10.0.0.3
+ip netns exec s2 route add default gw 10.0.0.3
